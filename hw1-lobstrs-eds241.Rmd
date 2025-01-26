@@ -271,6 +271,13 @@ spiny_counts |>
 
 ```{r}
 # USE: gt_summary::tbl_summary()
+
+# 0 = Non-MPA , 1 = MPA 
+spiny_counts |> 
+    gtsummary::tbl_summary(
+        by = treat, 
+        statistic = list(all_continuous() ~ "{mean} ({sd})") # mean and SD
+    )
 ```
 
 ------------------------------------------------------------------------
@@ -284,34 +291,40 @@ Step 4: OLS regression- building intuition
 ```{r}
 # NOTE: We will not evaluate/interpret model fit in this assignment (e.g., R-square)
 
-# m1_ols <- 
-# 
-# summ(m1_ols, model.fit = FALSE) 
+m1_ols <- lm(counts ~ treat, data = spiny_counts)
+ 
+summ(m1_ols, model.fit = FALSE) 
 
 ```
+
+The results of the OLS linear regression model of lobster counts regressed on treatment gave an intercept of 22.73. The intercept means that when treatment is zero (or the site is not an MPA), the average lobster counts per transect is 22.73. The predictor coefficient is 5.36. This means that when treatment is equal to 1 (the site is an MPA), the average lobsters counted is 5.36 more than when treatment is zero, which is ~ 28 lobsters per transect. 
 
 **c.** Check the model assumptions using the `check_model` function from the `performance` package
 
 **d.** Explain the results of the 4 diagnostic plots. Why are we getting this result?
 
 ```{r}
-#check_model(m1_ols,  check = "qq" )
+check_model(m1_ols,  check = "qq" )
 ```
 
 
 ```{r}
-#check_model(m1_ols, check = "normality")
+check_model(m1_ols, check = "normality")
 ```
 
 
 ```{r}
-#check_model(m1_ols, check = "homogeneity")
+check_model(m1_ols, check = "homogeneity")
 ```
 
 
 ```{r}
-#check_model(m1_ols, check = "pp_check")
+check_model(m1_ols, check = "pp_check")
 ```
+
+The above plots help to determine if the assumptions of OLS are met by this model. The first one is a QQ plot, which measures how similar the distribution of the data is to the therotical distribution, which can be used to assess the normality of the residuals (an assumption of OLS). Ideally, the plots would fall along the straight vertical line, but the plot above shows that they do not, meaning that the residuals of the data are not normal.  The next plot also looks at the normality of the residuals. If the residuals where normal, they would resemble the normal line, but we can see that the density of the residuals is very heavily centered near below zero, and then there is a sharp decrease and it tapers out, which doesn't exactly fit the normal line. 
+
+The third plot measures the homogeneity of variance. The OLS assumption is that the variance of the errors is consistent for all observations. In the plot of the fitted values versus the residuals, the line should be flat and horizontal, but the plot above shows a parabola shape, meaning the variance is not homogeneous. The last plot is a posterior predictive check, which basically just shows the model predicted values versus the true values. If the model is a good fit, the lines show resemble each other. However, this plot shows that the predicted values are not steep enough around the zero counts mark to fit the data.  
 
 ------------------------------------------------------------------------
 
@@ -330,25 +343,46 @@ Step 5: Fitting GLMs
 
 #HINT2: For the second glm() argument `family` use the following specification option `family = poisson(link = "log")`
 
-#m2_pois <- 
+# Poisson regression model 
+m2_pois <- glm(counts ~ treat, data = spiny_counts,  family= poisson(link = 'log'))
 
+# Summary of model 
+summ(m2_pois, model.fit = FALSE) # pred var = 0.21 
+
+# Percent change 
+exp(0.21) -1
 ```
+
+This model is of lobster counts regressed on treatment, but as a Poisson regression model. Poisson differs from a OLS model in that Poissons are designed to analyze count data while OLS usually works better for continuous dependent variable. The results of the model give an Intercept of 22.73, and the predictor intercept is 1.24. This means that the average lobster counts for non-MPA sites is 22.73 and the average for the MPA sites is 23.96 (1.24 more). The calculation of the incident ratio rate shows a 0.23% increase in lobster counts between the non-MPA sites and MPA sites. 
+
+In a Poisson models, you need to check for overdispersion. Dispersion refers to the relationship between the mean and the variance. An assumption of the Poisson model is that the mean is equal to the dispersion (or variance). Overdispersion means that variance in the data is greater than the mean. If this model is not overdispersed, than the mean of the counts should equal the variance. Overdispersion is going to be checked down below. 
+
 
 **e.** Check the model assumptions. Explain results.
 
 **f.** Conduct tests for over-dispersion & zero-inflation. Explain results.
 
 ```{r}
-#check_model(m2_pois)
+check_model(m2_pois)
 ```
 
 ```{r}
-#check_overdispersion(m2_pois)
+check_overdispersion(m2_pois)
 ```
 
 ```{r}
-#check_zeroinflation(m2_pois)
+check_zeroinflation(m2_pois)
 ```
+
+The code `check_model()` provides a visual check of the model assumptions like checking normality of residual, normality of random effects, linear relationship, variance, and multicollinearity. The assumptions of a Poisson model are that `Y` follows a Poisson distribution with non-negative integers and that variance (`dispersion`) is proportional to the mean. 
+
+The posterior predictive check that is used to determine discrepancies between real and predicted data shows that when lobster count is low, the actual and model predicted values are not a great fit, but once count increased the model and actual points match up really well. The homogeneity of variance plot reveals that the points are not randomly spread above and below the reference line, and instead are found only clustered at two values of fitted values. This indicates that the variance is not homoscedastic. Another plot that stood out in this check is the uniformity of residuals. Ideally, the points should fall along the diagonal lone, but we can see that the dots follow more of logistic curve.  
+
+The overdispersion test indicates that overdispersion is detected in this model. The results give a dispersion ratio of 67.03, when you are usually looking to have this ratio be close to 1 if the model is a good fit. Additionally, the Pearson's Chi squared test gives a very large value (16,758), which indicates a poor fit. 
+
+The results of the zero inflation test also reveal that this model is a poor fit. This checks if the amount of observed zeros is larger than the amount of predicted zeros. The results show that the predicted zeros should be 0, but the observed zeros is 27. This means that the model is under fitting zeros, and is therefor a bad fit. 
+
+
 
 **g.** Fit a negative binomial model using the function glm.nb() from the package `MASS` and check model diagnostics 
 
@@ -357,30 +391,36 @@ Step 5: Fitting GLMs
 **i.** Interpret the treatment estimate result in your own words. Compare with results from the previous model.
 
 ```{r}
-
 # NOTE: The `glm.nb()` function does not require a `family` argument
 
-#m3_nb <- 
+# Negative binomial model 
+m3_nb <- glm.nb(counts ~ treat, data = spiny_counts)
 
+# Summary of model 
+summ(m3_nb, exp = TRUE)
 ```
 
+A negative binomial model is used to analyze count data where the variance is greater than the mean. Since the last model indicated that overdispersion was detected in the data. This model might be a good fit. 
+
+The results of this model are similar to that of Poisson model in that the results of the intercept and predictor intercept are both 22.73 and 1.24 respectively. Now we need to see if the assumptions of this model are met. 
 
 ```{r}
-#check_overdispersion(m3_nb)
-```
-
-```{r}
-#check_zeroinflation(m3_nb)
-```
-
-```{r}
-#check_predictions(m3_nb)
+check_overdispersion(m3_nb)
 ```
 
 ```{r}
-#check_model(m3_nb)
+check_zeroinflation(m3_nb)
 ```
 
+```{r}
+check_predictions(m3_nb)
+```
+
+```{r}
+check_model(m3_nb)
+```
+
+The results of the model assumption checks indicate that this model seems to be a better for the data. The overdispersion check shows no overdispersion is not detected (dispersion ratio ~ 1). The zero inflation test showed that the observed zeros is 27 and the predicted zeros is 30 which is not a perfect match, but it is much better than the Poisson model. The posterior predictive check shows that the observed data and the model predicted data are a very close fit, especially when comparing it to the Poisson model. And finally the other plots present in the `check_model` test show a much closer fit of the observed residuals and the predicted residuals and the uniformity of residuals almost an exact fit. In comparison to the Poisson model the tests are revealing that the negative binomial model is a much better fit for the lobster counts data. 
 
 ------------------------------------------------------------------------
 
