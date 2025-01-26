@@ -9,7 +9,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(eval=FALSE, warning = FALSE, message = FALSE )
+knitr::opts_chunk$set(eval=TRUE, warning = FALSE, message = FALSE )
 ```
 
 ------------------------------------------------------------------------
@@ -31,7 +31,7 @@ knitr::opts_chunk$set(eval=FALSE, warning = FALSE, message = FALSE )
 -  Your knitted presentation should meet the quality you'd submit to research colleagues or feel confident sharing publicly. Refer to the rubric for details about presentation standards.
 
 
-**Assignment submission (YOUR NAME):** ______________________________________
+**Assignment submission (YOUR NAME):** Jordan Sibley 
 
 
 ----------------------------------------------------------------------
@@ -78,6 +78,10 @@ Step 1: Anticipating potential sources of selection bias
 
 **a.** Do the control sites (Arroyo Quemado, Carpenteria, and Mohawk) provide a strong counterfactual for our treatment sites (Naples, Isla Vista)? Write a paragraph making a case for why this comparison is centris paribus or whether selection bias is likely (be specific!).  
 
+
+I believe the control sites are a good counter factual for our treatment sites. From viewing the metadata (and working with this particular dataset a lot in undergrad), I know that all of the sites are relatively similar in habitat composition - the main difference being the level of protection. However, there is likely some room for bias due to some sites being closer to each other than others. There is a chance that these sites are more similar to each other just because of their physical distance. Additionally, there may be the bias due to the fact that lobsters are confined to the bounds of a site. The good news is, California Spiny lobsters do not travel far distances, and are known to remain in within a single crevice. However, once hatched, the larvae will often be transported by the currents until they settle to the bottom. So looking at population growth/decline within a LTER site over time might not be indicative of the reproduction of the adult lobsters. These ecological factors are important to consider when determining the level of bias between control and treatment sites. 
+
+
 ------------------------------------------------------------------------
 
 Step 2: Read & wrangle data
@@ -89,7 +93,11 @@ Step 2: Read & wrangle data
 ```{r}
 # HINT: check for coding of missing values (`na = "-99999"`)
 
-rawdata <- 
+# Read in spiny lobs data,, clean column names, and convert NA values  
+rawdata <- read_csv(here::here('data', 'spiny_abundance_sb_18.csv')) |> 
+    janitor::clean_names() |> 
+    mutate(size_mm = na_if(size_mm, -99999))
+    
 
 ```
 
@@ -99,7 +107,11 @@ rawdata <-
 
 ```{r}
 
-tidydata <- 
+# Create new df with factored sites 
+tidydata <- rawdata |> 
+    mutate(reef = factor(site, 
+                         levels = c("AQUE", "CARP", "MOHK", "IVEE",  "NAPL"),
+                         labels = c("Arroyo Quemado", "Carpenteria", "Mohawk", "Isla Vista",  "Naples")))
     
 ```
 
@@ -118,8 +130,18 @@ Create new `df` named `spiny_counts`
 
 #HINT(e): Use `case_when()` to create the 3 new variable columns
 
-spiny_counts <- 
-
+spiny_counts <- tidydata |>
+    # group by to get total count of lobs per transect 
+    group_by(year, site, transect) |> 
+    summarise(counts = sum(count),
+              mean_size = mean(size_mm, na.rm = TRUE)) |> 
+    # create new column that gives protection status 
+    mutate(mpa = case_when(site %in% c('AQUE', 'CARP', 'MOHK') ~ 'non-MPA',
+    TRUE ~ 'MPA')) |> 
+    # create column where mpa = 1 and non-mpas = 0 
+    mutate(treat = case_when(mpa == 'non-MPA' ~ 0, 
+                             mpa == 'MPA' ~ 1)) |> 
+    ungroup()
 ```
 
 > NOTE: This step is crucial to the analysis. Check with a friend or come to TA/instructor office hours to make sure the counts are coded correctly!
@@ -150,12 +172,100 @@ Create a plot of lobster **size** :
 4) You choose the grouping variable(s)!
 
 ```{r}
-# plot 1: ....
+# plot 1: ridge plot of lobs counts grouped by reef site (with mean counts)
 
+# Calculate mean counts 
+mean_counts <- spiny_counts |> 
+  group_by(site) |> 
+  summarize(mean_count = mean(counts))
+
+# Plot 
 spiny_counts %>% 
-ggplot()
-    
+ggplot(aes(x = counts, y = site, fill = site)) + 
+    ggridges::geom_density_ridges() + 
+    # add text of mean counts 
+    geom_text(data = mean_counts, 
+              aes(x = max(spiny_counts$counts) + 2,
+                  y = (site),
+              label = paste0("Mean counts: ", round(mean_count, 1))),
+              hjust = 1,
+              vjust = -.8,
+              size = 3) +
+    theme_light() + 
+    # remove legend 
+    theme(legend.position = "none") + 
+    labs(x = "Lobster counts per transect",
+         y = "LTER Site",
+         title = "Density of Spiny Lobsters Counts Per LTER Site")
 ```
+
+```{r}
+# plot 2: histogram lobs counts grouped by MPA status (with median counts)
+
+# Calculate medians for each mpa group
+medians <- spiny_counts %>%
+  group_by(mpa) %>%
+  summarize(median_count = median(counts))
+
+# Plot 
+spiny_counts |> 
+    ggplot(aes(x = counts)) +
+    geom_histogram(fill = 'lightblue',
+                   col = 'darkblue') + 
+    facet_wrap(~mpa) + 
+    # lines that show median 
+    geom_vline(data = medians, aes(xintercept = median_count), 
+               color = 'darkred', linetype = "dashed", size = 1) + 
+    # median label 
+    geom_text(data = medians, aes(x = median_count, y = -Inf, 
+                                  label = paste0("Median: ", median_count)),
+              hjust = -0.3, vjust = -8, color = "darkred", size = 4) + 
+    # labels 
+    labs(x = 'Lobster counts per transect',
+         y = 'Frequency',
+         title = 'Histogram of Lobster Counts per LTER sites (MPA vs Non-MPA)') + 
+    theme_light()
+```
+
+```{r}
+# plot 3: jitter plot lobs counts grouped by year (with max count)
+
+# Identify max counts for each year
+counts_max <- spiny_counts %>%
+  group_by(year) %>%
+  mutate(is_max = counts == max(counts)) %>%
+  ungroup()
+
+# Plot 
+counts_max |> 
+    ggplot(aes(x = year, y = counts, col = year)) + 
+    geom_jitter() + 
+    # set x axis 
+    scale_x_continuous(breaks = seq(2012, 2018, by = 1)) + 
+    # highlight the max count of each day 
+    gghighlight::gghighlight(is_max, label_key = counts)  +
+    # labels 
+    labs(x = "Year",
+         y = "Lobster Counts",
+         title = "Maximum Lobster Counts per Year") + 
+    theme_minimal()
+```
+
+```{r}
+# plot 4: Violin plot of lobs size_mm grouped by mpa status 
+spiny_counts |> 
+  ggplot(aes(x = mpa, y = mean_size, fill = mpa)) +
+  geom_violin() + 
+  geom_boxplot(width = 0.1, color = "black", alpha = 0.5) + 
+  scale_fill_manual(values = c("non-MPA" = "#FF9999", "MPA" = "#99CCFF")) + 
+  theme_minimal() + 
+  theme(legend.position = "none") + # Remove the legend
+  labs(x = "MPA Status",
+       y = "Mean Size (mm)",
+       title = "Comparison of Mean Lobster Size in MPA and Non-MPA Areas"
+  )
+```
+
 
 **c.** Compare means of the outcome by treatment group. Using the `tbl_summary()` function from the package [`gt_summary`](https://www.danieldsjoberg.com/gtsummary/articles/tbl_summary.html) 
 
@@ -174,9 +284,9 @@ Step 4: OLS regression- building intuition
 ```{r}
 # NOTE: We will not evaluate/interpret model fit in this assignment (e.g., R-square)
 
-m1_ols <- 
-
-summ(m1_ols, model.fit = FALSE) 
+# m1_ols <- 
+# 
+# summ(m1_ols, model.fit = FALSE) 
 
 ```
 
@@ -185,22 +295,22 @@ summ(m1_ols, model.fit = FALSE)
 **d.** Explain the results of the 4 diagnostic plots. Why are we getting this result?
 
 ```{r}
-check_model(m1_ols,  check = "qq" )
+#check_model(m1_ols,  check = "qq" )
 ```
 
 
 ```{r}
-check_model(m1_ols, check = "normality")
+#check_model(m1_ols, check = "normality")
 ```
 
 
 ```{r}
-check_model(m1_ols, check = "homogeneity")
+#check_model(m1_ols, check = "homogeneity")
 ```
 
 
 ```{r}
-check_model(m1_ols, check = "pp_check")
+#check_model(m1_ols, check = "pp_check")
 ```
 
 ------------------------------------------------------------------------
@@ -220,7 +330,7 @@ Step 5: Fitting GLMs
 
 #HINT2: For the second glm() argument `family` use the following specification option `family = poisson(link = "log")`
 
-m2_pois <- 
+#m2_pois <- 
 
 ```
 
@@ -229,15 +339,15 @@ m2_pois <-
 **f.** Conduct tests for over-dispersion & zero-inflation. Explain results.
 
 ```{r}
-check_model(m2_pois)
+#check_model(m2_pois)
 ```
 
 ```{r}
-check_overdispersion(m2_pois)
+#check_overdispersion(m2_pois)
 ```
 
 ```{r}
-check_zeroinflation(m2_pois)
+#check_zeroinflation(m2_pois)
 ```
 
 **g.** Fit a negative binomial model using the function glm.nb() from the package `MASS` and check model diagnostics 
@@ -250,25 +360,25 @@ check_zeroinflation(m2_pois)
 
 # NOTE: The `glm.nb()` function does not require a `family` argument
 
-m3_nb <- 
+#m3_nb <- 
 
 ```
 
 
 ```{r}
-check_overdispersion(m3_nb)
+#check_overdispersion(m3_nb)
 ```
 
 ```{r}
-check_zeroinflation(m3_nb)
+#check_zeroinflation(m3_nb)
 ```
 
 ```{r}
-check_predictions(m3_nb)
+#check_predictions(m3_nb)
 ```
 
 ```{r}
-check_model(m3_nb)
+#check_model(m3_nb)
 ```
 
 
@@ -282,9 +392,9 @@ Step 6: Compare models
 
 ```{r}
 
-export_summs(# ADD MODELS
-             model.names = c("OLS","Poisson", "NB"),
-             statistics = "none")
+# export_summs(# ADD MODELS
+#              model.names = c("OLS","Poisson", "NB"),
+#              statistics = "none")
 
 ```
 
@@ -305,17 +415,17 @@ Step 7: Building intuition - fixed effects
 
 ```{r}
 
-ff_counts <- spiny_counts %>% 
-    mutate(year=as_factor(year))
-    
-m5_fixedeffs <- glm.nb(
-    counts ~ 
-        treat +
-        year +
-        treat*year,
-    data = ff_counts)
-
-summ(m5_fixedeffs, model.fit = FALSE)
+# ff_counts <- spiny_counts %>% 
+#     mutate(year=as_factor(year))
+#     
+# m5_fixedeffs <- glm.nb(
+#     counts ~ 
+#         treat +
+#         year +
+#         treat*year,
+#     data = ff_counts)
+# 
+# summ(m5_fixedeffs, model.fit = FALSE)
 ```
 
 **e.** Look at the model predictions: Use the `interact_plot()` function from package `interactions` to plot mean predictions by year and treatment status. 
@@ -324,8 +434,8 @@ summ(m5_fixedeffs, model.fit = FALSE)
 
 ```{r}
 
-interact_plot(m5_fixedeffs, pred = year, modx = treat,
-              outcome.scale = "link") # NOTE: y-axis on log-scale
+# interact_plot(m5_fixedeffs, pred = year, modx = treat,
+#               outcome.scale = "link") # NOTE: y-axis on log-scale
 
 # HINT: Change `outcome.scale` to "response" to convert y-axis scale to counts
 ```
@@ -342,7 +452,7 @@ The plot should have...
 # Hint 1: Group counts by `year` and `mpa` and calculate the `mean_count`
 # Hint 2: Convert variable `year` to a factor
 
-plot_counts <- 
+# plot_counts <- 
 
 # plot_counts %>% ggplot() ...
 ```
