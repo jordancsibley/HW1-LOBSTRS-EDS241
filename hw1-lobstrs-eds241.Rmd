@@ -353,7 +353,7 @@ summ(m2_pois, model.fit = FALSE) # pred var = 0.21
 exp(0.21) -1
 ```
 
-This model is of lobster counts regressed on treatment, but as a Poisson regression model. Poisson differs from a OLS model in that Poissons are designed to analyze count data while OLS usually works better for continuous dependent variable. The results of the model give an Intercept of 22.73, and the predictor intercept is 1.24. This means that the average lobster counts for non-MPA sites is 22.73 and the average for the MPA sites is 23.96 (1.24 more). The calculation of the incident ratio rate shows a 0.23% increase in lobster counts between the non-MPA sites and MPA sites. 
+This model is of lobster counts regressed on treatment, but as a Poisson regression model. Poisson differs from a OLS model in that Poissons are designed to analyze count data while OLS usually works better for continuous dependent variable. The results of the model give an Intercept of 22.73, and the predictor intercept is 1.24. This means that the average lobster counts for non-MPA sites is 22.73 and the average for the MPA sites is 23.96 (1.24 more). The calculation of the incident ratio rate shows a 23% increase in lobster counts between the non-MPA sites and MPA sites. 
 
 In a Poisson models, you need to check for overdispersion. Dispersion refers to the relationship between the mean and the variance. An assumption of the Poisson model is that the mean is equal to the dispersion (or variance). Overdispersion means that variance in the data is greater than the mean. If this model is not overdispersed, than the mean of the counts should equal the variance. Overdispersion is going to be checked down below. 
 
@@ -397,12 +397,12 @@ The results of the zero inflation test also reveal that this model is a poor fit
 m3_nb <- glm.nb(counts ~ treat, data = spiny_counts)
 
 # Summary of model 
-summ(m3_nb, exp = TRUE)
+summ(m3_nb, model.fit = FALSE)
 ```
 
 A negative binomial model is used to analyze count data where the variance is greater than the mean. Since the last model indicated that overdispersion was detected in the data. This model might be a good fit. 
 
-The results of this model are similar to that of Poisson model in that the results of the intercept and predictor intercept are both 22.73 and 1.24 respectively. Now we need to see if the assumptions of this model are met. 
+The results of this model are similar to that of Poisson model in that the results of the intercept and predictor intercept are both 22.73 and 0.21 respectively. Now we need to see if the assumptions of this model are met. 
 
 ```{r}
 check_overdispersion(m3_nb)
@@ -431,12 +431,14 @@ Step 6: Compare models
 **c.** Write a short paragraph comparing the results. Is the treatment effect `robust` or stable across the model specifications. 
 
 ```{r}
-
-# export_summs(# ADD MODELS
-#              model.names = c("OLS","Poisson", "NB"),
-#              statistics = "none")
+# Compare 3 regression models 
+export_summs(m1_ols, m2_pois, m3_nb, 
+              model.names = c("OLS","Poisson", "NB"),
+              statistics = "none")
 
 ```
+
+The code above compares the intercepts and predictor intercepts of the three different models of lobster counts regressed against treatment (MPA or non-MPA). The results show that the intercept, or average lobster count when site is a non-MPA is 22.73. The intercept for Poisson and negative binomial (NB) is 3.12, but you must exponentiate it to get the predicted count which is ~ 22.6. The effect of treatment (MPA site) for the OLS model is an average increase of 5.36 lobster counts while for the Poisson and NB models predictor intercepts are 0.21 (which is the log of the IRR) so approximately a 23% increase in predicted lobster count. The results of this test do demonstrate that the intercept is statistically significant for all three models, but for the predictor intercept only the Poisson value is statistically significant. The results indicate that the treatment effect is not robust across the models since the statistical significance varies. 
 
 ------------------------------------------------------------------------
 
@@ -455,18 +457,19 @@ Step 7: Building intuition - fixed effects
 
 ```{r}
 
-# ff_counts <- spiny_counts %>% 
-#     mutate(year=as_factor(year))
-#     
-# m5_fixedeffs <- glm.nb(
-#     counts ~ 
-#         treat +
-#         year +
-#         treat*year,
-#     data = ff_counts)
-# 
-# summ(m5_fixedeffs, model.fit = FALSE)
+ff_counts <- spiny_counts %>% 
+    mutate(year=as_factor(year))
+     
+m5_fixedeffs <- glm.nb(
+     counts ~ treat + year + treat*year,
+     data = ff_counts)
+ 
+summ(m5_fixedeffs, model.fit = FALSE)
 ```
+
+This negative binomial regression model is different than the first one because this one adds a fixed effect for the year (which is factored, which allows the model to compare each year to the reference year 2012) and an interaction term between year and treat. 
+
+The results of the model provides a comparison for each sub group. It compares the average of each year with each treatment type. The coefficients that are year---- represent how lobster counts in the non-MPA sites changed from the baseline year 2012. The general trend is that it steadily increases from from 2013 to 2017/18. The coefficients that are treat:year---- describe the treatment effect varies by year. The positive values suggest that the lobster counts of the MPA sites increased compared to non-MPAs in those years. The baseline year 2012, is negative, which means that in that year there were more lobster counts in the non-MPA sites than the MPA sites. The result makes sense as the Naples MPA was established in 2010 and the Campus Point MPA was established in 2012. The impacts of protection has a bit of a lag since the lobster populations likely needed time to recover and benefit from protection. 
 
 **e.** Look at the model predictions: Use the `interact_plot()` function from package `interactions` to plot mean predictions by year and treatment status. 
 
@@ -474,11 +477,14 @@ Step 7: Building intuition - fixed effects
 
 ```{r}
 
-# interact_plot(m5_fixedeffs, pred = year, modx = treat,
-#               outcome.scale = "link") # NOTE: y-axis on log-scale
+interact_plot(m5_fixedeffs, pred = year, modx = treat,
+               outcome.scale = "link") # NOTE: y-axis on log-scale
 
 # HINT: Change `outcome.scale` to "response" to convert y-axis scale to counts
 ```
+
+The plot re affirms what I had observed in the model before. In the baseline year, 2012, there are more average lobster counts in the non-MPA sites and then by the 2018 the MPA sites have more counts. One thing this plot does reveal is that from 2013 to 2017, both the MPA and non-MPA sites average counts are increasing at roughly the same rate. 
+
 
 **g.** Using `ggplot()` create a plot in same style as the previous `interaction plot`, but displaying the original scale of the outcome variable (lobster counts). This type of plot is commonly used to show how the treatment effect changes across discrete time points (i.e., panel data).
 
@@ -492,9 +498,26 @@ The plot should have...
 # Hint 1: Group counts by `year` and `mpa` and calculate the `mean_count`
 # Hint 2: Convert variable `year` to a factor
 
-# plot_counts <- 
+plot_counts <- spiny_counts |> 
+    group_by(year, mpa) |> 
+    summarise(mean_count = mean(counts), .groups = "drop") |> 
+    mutate(year=as_factor(year))
 
-# plot_counts %>% ggplot() ...
+plot_counts %>% ggplot(aes(x = year, y = mean_count, group = mpa, color = mpa)) + 
+    # line and dots 
+    geom_line(size = 1) + 
+    geom_point(size = 3) + 
+    # colors 
+    scale_color_manual(values = c("non-MPA" = 'darkblue',
+                                  "MPA" = 'lightblue')) +
+    # labels 
+    labs(x = "Year", 
+         y = "Mean lobster counts per transect", 
+         title = "Average Lobster Counts in SBC LTER Sites (2012-2018)",
+         color = "Protection Type") + 
+    theme_minimal() + 
+    theme(legend.position = "bottom")
+
 ```
 
 ------------------------------------------------------------------------
@@ -508,6 +531,10 @@ d. Discuss the following causal inference assumptions in the context of the MPA 
     
     1) SUTVA: Stable Unit Treatment Value assumption 
     2) Excludability assumption
+
+
+I had talked a bit about this spill over effect at the beginning of this assignment when I first was anticipating types of bias. Spillover effects ar every likely in this research context. The reason why it might serve as in issue for identification of causal effects is that the lobster (and especially their larvae) are not confined to an individual LTER sites. In fact, there is evidence that the spill over effect is benefiting the spiny lobster fishery in southern California. One of my TA's from undergrad, Jordan Gallagher, would often talk about the research he did on this topic using this same dataset that we are now.  https://www.nature.com/articles/s41598-021-82371-5
+Spillover interferes with identifying a treatment's causal inference as it breaks the assumption of no interference, or it goes against the Unit Treatment Value Assumption (SUTVA). In this study, it is impossible to tell from this data if the added benefit of protection in MPA sites didn't also benefit the non-MPA sites through the spillover effect. It potentially could explain why from 2012 to 2017/8, average lobster counts increased in both MPA and non-MPA sites. Additionally, we can't tell if this study adheres to the excludability assumpion, which states that the only way the treatment affects the outcome is through the intended causal pathway (the treatment itself) and not by other means. It might have been valuable to measure variables that impact lobster populations like availability of prey and environmental parameters to get a better understanding if MPA treatment is the true causal effect on lobster counts.  
 
 ------------------------------------------------------------------------
 
