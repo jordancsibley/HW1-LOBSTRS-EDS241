@@ -79,7 +79,7 @@ Step 1: Anticipating potential sources of selection bias
 **a.** Do the control sites (Arroyo Quemado, Carpenteria, and Mohawk) provide a strong counterfactual for our treatment sites (Naples, Isla Vista)? Write a paragraph making a case for why this comparison is centris paribus or whether selection bias is likely (be specific!).  
 
 
-I believe the control sites are a good counter factual for our treatment sites. From viewing the metadata (and working with this particular dataset a lot in undergrad), I know that all of the sites are relatively similar in habitat composition - the main difference being the level of protection. However, there is likely some room for bias due to some sites being closer to each other than others. There is a chance that these sites are more similar to each other just because of their physical distance. Additionally, there may be the bias due to the fact that lobsters are confined to the bounds of a site. The good news is, California Spiny lobsters do not travel far distances, and are known to remain in within a single crevice. However, once hatched, the larvae will often be transported by the currents until they settle to the bottom. So looking at population growth/decline within a LTER site over time might not be indicative of the reproduction of the adult lobsters. These ecological factors are important to consider when determining the level of bias between control and treatment sites. 
+Revised answer: The control sites, (Arroyo Quemado, Carpenteria, and Mohawk) do not likely provide a strong counterfactual for our treatment sites (Naples, Isla Vista). A strong counterfactual in an experimental design usually has a random assignment, resembles the treatment site as similarly as possible, and can control for confounding variables. A marine site does not become a designated protected area randomly, and there is a lot of bureaucracy and different motivations for choosing certain sites. Additionally, even though these sites are close together on the map, reefs can vary in their composition and environmental variables despite their proximity. Because of these reasons, the control sites are not likely strong counterfactuals, however, in natural experiments sometimes you have to work with what you have.   
 
 
 ------------------------------------------------------------------------
@@ -176,8 +176,10 @@ Create a plot of lobster **size** :
 
 # Calculate mean counts 
 mean_counts <- spiny_counts |> 
-  group_by(site) |> 
-  summarize(mean_count = mean(counts))
+    group_by(site) |> 
+    summarize(mean_count = mean(counts)) |> 
+    ungroup() # un group variables 
+    
 
 # Plot 
 spiny_counts %>% 
@@ -357,6 +359,8 @@ This model is of lobster counts regressed on treatment, but as a Poisson regress
 
 In a Poisson models, you need to check for overdispersion. Dispersion refers to the relationship between the mean and the variance. An assumption of the Poisson model is that the mean is equal to the dispersion (or variance). Overdispersion means that variance in the data is greater than the mean. If this model is not overdispersed, than the mean of the counts should equal the variance. Overdispersion is going to be checked down below. 
 
+In comparison to the OLS model, the Poisson model’s intercept predicts a similar number of average lobsters counted in the non-MPA sites ~ 22, however, the p-value of the treatment effect in the Poisson is significant (p = 0) while the p-value of the treatment effect in the OLS model was not significant (p = 0.3) in a 95 % confidence interval. This would indicate that we can more confidently accept the estimate of increased average lobsters within the MPA sites of the Poisson model as compared to the OLS model. 
+
 
 **e.** Check the model assumptions. Explain results.
 
@@ -402,7 +406,9 @@ summ(m3_nb, model.fit = FALSE)
 
 A negative binomial model is used to analyze count data where the variance is greater than the mean. Since the last model indicated that overdispersion was detected in the data. This model might be a good fit. 
 
-The results of this model are similar to that of Poisson model in that the results of the intercept and predictor intercept are both 22.73 and 0.21 respectively. Now we need to see if the assumptions of this model are met. 
+The results of the negative binomial model are similar to that of the OLS and Poisson model in that the results of the intercept are ~ 22, and match the estimated treatment effect with 0.21, however, the p-value of the treatment effect in this model is not significant (p = 0.22). So out of the three models, only the Poisson model has produced a significant p-value of the treatment effect. 
+
+
 
 ```{r}
 check_overdispersion(m3_nb)
